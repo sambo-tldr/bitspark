@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useWallet } from "@/context/WalletContext";
@@ -7,6 +7,7 @@ import { CelebrationEffect } from "@/components/CelebrationEffect";
 import { Loader2, AlertCircle, ArrowRight, ArrowLeft, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Campaign } from "@/data/mockData";
+import { useContribute, getErrorMessage, getExplorerUrl } from "@/hooks/useContracts";
 
 interface ContributeModalProps {
   open: boolean;
@@ -15,34 +16,37 @@ interface ContributeModalProps {
 }
 
 const presetAmounts = [0.01, 0.05, 0.1, 0.25, 0.5, 1.0];
-const FEE_RATE = 0.0001;
 
 export function ContributeModal({ open, onOpenChange, campaign }: ContributeModalProps) {
-  const { balance } = useWallet();
+  const { address } = useWallet();
+  const contributeMutation = useContribute();
   const [step, setStep] = useState(0);
   const [amount, setAmount] = useState<number | null>(null);
   const [customAmount, setCustomAmount] = useState("");
   const [status, setStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [txId, setTxId] = useState("");
 
   const selectedAmount = amount ?? (parseFloat(customAmount) || 0);
-  const fee = FEE_RATE;
-  const total = selectedAmount + fee;
-  const insufficientBalance = total > balance;
 
-  const reset = () => { setStep(0); setAmount(null); setCustomAmount(""); setStatus("idle"); setErrorMsg(""); };
+  const reset = () => { setStep(0); setAmount(null); setCustomAmount(""); setStatus("idle"); setErrorMsg(""); setTxId(""); };
 
   const handleClose = (v: boolean) => { if (!v) reset(); onOpenChange(v); };
 
   const handleConfirm = async () => {
     setStep(2);
     setStatus("processing");
-    await new Promise((r) => setTimeout(r, 2500));
-    if (Math.random() < 0.15) {
-      setStatus("error");
-      setErrorMsg("Transaction rejected by the network. Please try again.");
-    } else {
+    try {
+      const result = await contributeMutation.mutateAsync({
+        campaignId: parseInt(campaign.id),
+        amountBtc: selectedAmount,
+        senderAddress: address,
+      });
+      setTxId(result.txId || "");
       setStatus("success");
+    } catch (err) {
+      setStatus("error");
+      setErrorMsg(getErrorMessage(err));
     }
   };
 
@@ -53,6 +57,7 @@ export function ContributeModal({ open, onOpenChange, campaign }: ContributeModa
           <DialogTitle className="text-heading-2 text-center">
             {status === "success" ? "Contribution Sent!" : status === "error" ? "Transaction Failed" : "Back This Project"}
           </DialogTitle>
+          <DialogDescription className="sr-only">Contribute sBTC to this campaign</DialogDescription>
         </DialogHeader>
 
         <AnimatePresence mode="wait">
@@ -82,14 +87,8 @@ export function ContributeModal({ open, onOpenChange, campaign }: ContributeModa
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-caption text-muted-foreground font-mono-display">BTC</span>
               </div>
-              {insufficientBalance && selectedAmount > 0 && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20 text-body-sm text-warning">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  Insufficient balance. You have {balance} BTC.
-                </div>
-              )}
               <Button
-                disabled={selectedAmount <= 0 || insufficientBalance}
+                disabled={selectedAmount <= 0}
                 onClick={() => setStep(1)}
                 className="w-full gradient-primary text-primary-foreground gap-2"
               >
@@ -103,8 +102,6 @@ export function ContributeModal({ open, onOpenChange, campaign }: ContributeModa
             <motion.div key="confirm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-5 py-2">
               <div className="glass rounded-xl p-5 space-y-3 text-body-sm">
                 <div className="flex justify-between"><span className="text-muted-foreground">Amount</span><span className="font-mono-display">{selectedAmount} BTC</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Network Fee</span><span className="font-mono-display">{fee} BTC</span></div>
-                <div className="border-t border-border/30 pt-3 flex justify-between font-semibold"><span>Total</span><span className="font-mono-display text-primary">{total.toFixed(4)} BTC</span></div>
                 <div className="flex justify-between text-caption"><span className="text-muted-foreground">Recipient</span><span className="font-mono text-muted-foreground truncate max-w-[200px]">{campaign.creatorAddress}</span></div>
               </div>
               <div className="flex gap-3">
@@ -128,10 +125,12 @@ export function ContributeModal({ open, onOpenChange, campaign }: ContributeModa
                 <>
                   <CelebrationEffect />
                   <p className="text-body text-muted-foreground mt-4">You contributed <span className="text-primary font-mono-display font-semibold">{selectedAmount} BTC</span></p>
-                  <div className="glass rounded-lg p-3 w-full">
-                    <p className="text-caption text-muted-foreground">Transaction Hash</p>
-                    <p className="font-mono text-body-sm text-primary break-all">0x8a3b7c4d5e6f1a2b3c4d5e6f7a8b9c0d1e2f3a4b</p>
-                  </div>
+                  {txId && (
+                    <div className="glass rounded-lg p-3 w-full">
+                      <p className="text-caption text-muted-foreground">Transaction Hash</p>
+                      <a href={getExplorerUrl(txId)} target="_blank" rel="noopener noreferrer" className="font-mono text-body-sm text-primary break-all hover:underline">{txId}</a>
+                    </div>
+                  )}
                   <Button onClick={() => handleClose(false)} className="gradient-primary text-primary-foreground">Done</Button>
                 </>
               )}
