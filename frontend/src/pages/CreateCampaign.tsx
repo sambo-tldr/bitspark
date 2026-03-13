@@ -12,8 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { categories } from "@/data/mockData";
+import { useCreateCampaign, getErrorMessage, getExplorerUrl } from "@/hooks/useContracts";
+import { getDefaultImage } from "@/lib/campaignMetadata";
+import { useWallet } from "@/context/WalletContext";
 import { cn } from "@/lib/utils";
 
 const steps = ["Basics", "Details", "Review"];
@@ -21,8 +24,13 @@ const steps = ["Basics", "Details", "Review"];
 export default function CreateCampaign() {
   const rm = useRM();
   const navigate = useNavigate();
+  const { connected, connect } = useWallet();
+  const createMutation = useCreateCampaign();
   const [currentStep, setCurrentStep] = useState(0);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [txId, setTxId] = useState("");
+  const [launchError, setLaunchError] = useState("");
+  const [launching, setLaunching] = useState(false);
   const [dragActive, setDragActive] = useState(false);
 
   const [form, setForm] = useState({
@@ -41,7 +49,33 @@ export default function CreateCampaign() {
     update("image", "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80");
   };
 
-  const handleLaunch = () => setShowSuccess(true);
+  const handleLaunch = async () => {
+    if (!connected) {
+      connect();
+      return;
+    }
+    setLaunching(true);
+    setLaunchError("");
+    try {
+      const result = await createMutation.mutateAsync({
+        title: form.title,
+        description: form.description,
+        goalBtc: parseFloat(form.goal),
+        durationDays: parseInt(form.duration),
+        metadata: {
+          imageUrl: form.image || getDefaultImage(form.category),
+          category: form.category,
+          shortDescription: form.description.slice(0, 120),
+        },
+      });
+      setTxId(result.txId || "");
+      setShowSuccess(true);
+    } catch (err) {
+      setLaunchError(getErrorMessage(err));
+    } finally {
+      setLaunching(false);
+    }
+  };
   const goalUsd = form.goal ? (parseFloat(form.goal) * 97500).toLocaleString() : "0";
   const goalNum = form.goal ? parseFloat(form.goal) : 0;
 
@@ -230,11 +264,21 @@ export default function CreateCampaign() {
                   Next <ArrowRight className="w-4 h-4" />
                 </Button>
               ) : (
-                <Button onClick={handleLaunch} disabled={!form.termsAccepted} className="gap-2 gradient-primary text-primary-foreground glow-orange btn-press">
-                  <Zap className="w-4 h-4" /> Launch Campaign
+                <Button onClick={handleLaunch} disabled={!form.termsAccepted || launching} className="gap-2 gradient-primary text-primary-foreground glow-orange btn-press">
+                  {launching ? (
+                    <><span className="animate-spin mr-1">⏳</span> Submitting...</>
+                  ) : (
+                    <><Zap className="w-4 h-4" /> Launch Campaign</>
+                  )}
                 </Button>
               )}
             </div>
+
+            {launchError && (
+              <div className="mt-4 p-4 rounded-lg bg-destructive/10 border border-destructive/20 text-body-sm text-destructive">
+                {launchError}
+              </div>
+            )}
           </div>
         </section>
       </PageTransition>
@@ -244,17 +288,20 @@ export default function CreateCampaign() {
         <DialogContent className="glass-strong border-border/50 text-center">
           <DialogHeader>
             <DialogTitle className="text-heading-1 text-center">Campaign Launched!</DialogTitle>
+            <DialogDescription className="sr-only">Your campaign has been successfully created</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <CelebrationEffect />
             <p className="text-muted-foreground mt-4">Your campaign is now live on the Bitcoin blockchain.</p>
-            <div className="glass rounded-lg p-3">
-              <p className="text-caption text-muted-foreground">Transaction Hash</p>
-              <p className="font-mono text-body-sm text-primary break-all">0x7f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e</p>
-            </div>
+            {txId && (
+              <div className="glass rounded-lg p-3">
+                <p className="text-caption text-muted-foreground">Transaction Hash</p>
+                <a href={getExplorerUrl(txId)} target="_blank" rel="noopener noreferrer" className="font-mono text-body-sm text-primary break-all hover:underline">{txId}</a>
+              </div>
+            )}
             <div className="flex gap-3 justify-center">
-              <Button onClick={() => { setShowSuccess(false); navigate("/campaign/1"); }} className="gradient-primary text-primary-foreground btn-press">
-                View Campaign
+              <Button onClick={() => { setShowSuccess(false); navigate("/explore"); }} className="gradient-primary text-primary-foreground btn-press">
+                Explore Campaigns
               </Button>
               <Button variant="outline" onClick={() => setShowSuccess(false)} className="btn-press">Close</Button>
             </div>

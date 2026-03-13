@@ -16,8 +16,9 @@ import { AnimatedCounter } from "@/components/AnimatedCounter";
 import { CampaignDetailSkeleton } from "@/components/skeletons/CampaignDetailSkeleton";
 import { ContributeModal } from "@/components/modals/ContributeModal";
 import { useWallet } from "@/context/WalletContext";
-import { campaigns, backersList } from "@/data/mockData";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { campaigns as mockCampaigns, backersList } from "@/data/mockData";
+import { useCampaign, useCampaigns } from "@/hooks/useContracts";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Wallet } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { EmptyStateIllustration } from "@/components/EmptyStateIllustration";
@@ -35,19 +36,22 @@ function addressToColor(address: string) {
 export default function CampaignDetail() {
   const rm = useRM();
   const { id } = useParams();
-  const campaign = campaigns.find((c) => c.id === id);
+  const campaignId = parseInt(id || "0", 10);
+  const { data: onChainCampaign, isLoading: chainLoading } = useCampaign(campaignId);
+  const { data: allCampaigns } = useCampaigns();
+
+  // Try on-chain first, then fall back to mock
+  const campaign = onChainCampaign || mockCampaigns.find((c) => c.id === id) || null;
+  const campaigns = allCampaigns && allCampaigns.length > 0 ? allCampaigns : mockCampaigns;
+
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [showContribute, setShowContribute] = useState(false);
   const [showWalletPrompt, setShowWalletPrompt] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const { connected, setShowConnectModal } = useWallet();
+  const { connected, connect } = useWallet();
 
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 800);
-    return () => clearTimeout(t);
-  }, []);
+  const loading = chainLoading;
 
-  if (!campaign) {
+  if (!campaign && !loading) {
     return (
       <Layout>
         <div className="container py-20 text-center">
@@ -275,6 +279,7 @@ export default function CampaignDetail() {
         <DialogContent className="glass-strong border-border/50 sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-heading-2 text-center">Wallet Required</DialogTitle>
+            <DialogDescription className="sr-only">Connect your wallet to contribute to this campaign</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center gap-5 py-4">
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
@@ -284,7 +289,7 @@ export default function CampaignDetail() {
               You need to connect a wallet before contributing to this campaign.
             </p>
             <Button
-              onClick={() => { setShowWalletPrompt(false); setShowConnectModal(true); }}
+              onClick={() => { setShowWalletPrompt(false); connect(); }}
               className="gradient-primary text-primary-foreground glow-orange gap-2 btn-press"
             >
               <Wallet className="w-4 h-4" /> Connect Wallet

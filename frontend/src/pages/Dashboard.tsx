@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Plus, BarChart3, Wallet, ArrowUpRight, RefreshCw, Eye, Sun, Moon, Sunrise } from "lucide-react";
 import { motion } from "framer-motion";
@@ -15,9 +15,10 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useWallet } from "@/context/WalletContext";
-import { campaigns } from "@/data/mockData";
+import { campaigns as mockCampaigns } from "@/data/mockData";
+import { useCampaigns, useCreatorStats, useBackerStats, satsToBtc } from "@/hooks/useContracts";
 import { cn } from "@/lib/utils";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 const statusColors: Record<string, string> = {
   active: "bg-blue-500/10 text-blue-400 border-blue-500/20",
@@ -33,17 +34,6 @@ const statusBorders: Record<string, string> = {
   claimed: "status-claimed",
 };
 
-const myCampaigns = campaigns.slice(0, 3);
-const backedProjects = campaigns.slice(3, 6);
-
-const activityTimeline = [
-  { id: 1, action: "Received contribution", amount: "0.05 BTC", campaign: "Mesh Network", time: "2h ago" },
-  { id: 2, action: "Campaign created", campaign: "Hardware Wallet", time: "1d ago" },
-  { id: 3, action: "Backed project", amount: "0.1 BTC", campaign: "Bitcoin Education", time: "3d ago" },
-  { id: 4, action: "Received contribution", amount: "0.25 BTC", campaign: "Mesh Network", time: "5d ago" },
-  { id: 5, action: "Milestone reached", campaign: "Hardware Wallet", time: "1w ago" },
-];
-
 function getGreeting() {
   const hour = new Date().getHours();
   if (hour < 12) return { text: "Good morning", icon: Sunrise };
@@ -51,19 +41,35 @@ function getGreeting() {
   return { text: "Good evening", icon: Moon };
 }
 
+const activityTimeline = [
+  { id: 1, action: "Received contribution", amount: "0.05 BTC", campaign: "Campaign", time: "Recently" },
+  { id: 2, action: "Campaign created", campaign: "New Campaign", time: "Recently" },
+];
+
 export default function Dashboard() {
   const rm = useRM();
-  const { connected, setShowConnectModal } = useWallet();
-  const [loading, setLoading] = useState(true);
-  const [claimModal, setClaimModal] = useState<{ open: boolean; title: string; raised: number }>({ open: false, title: "", raised: 0 });
-  const [refundModal, setRefundModal] = useState<{ open: boolean; title: string; amount: number }>({ open: false, title: "", amount: 0 });
+  const { connected, address, connect } = useWallet();
+  const { data: allCampaigns, isLoading: campaignsLoading } = useCampaigns();
+  const { data: creatorStats } = useCreatorStats(connected ? address : undefined);
+  const { data: backerStats } = useBackerStats(connected ? address : undefined);
+
+  const campaigns = allCampaigns && allCampaigns.length > 0 ? allCampaigns : mockCampaigns;
+
+  // Filter campaigns by wallet address
+  const myCampaigns = useMemo(() =>
+    campaigns.filter((c) => c.creatorAddress === address),
+    [campaigns, address]
+  );
+  const backedProjects = useMemo(() =>
+    campaigns.filter((c) => c.creatorAddress !== address).slice(0, 6),
+    [campaigns, address]
+  );
+
+  const loading = campaignsLoading;
+  const [claimModal, setClaimModal] = useState<{ open: boolean; title: string; raised: number; campaignId: number }>({ open: false, title: "", raised: 0, campaignId: 0 });
+  const [refundModal, setRefundModal] = useState<{ open: boolean; title: string; amount: number; campaignId: number }>({ open: false, title: "", amount: 0, campaignId: 0 });
   const [showWalletPrompt, setShowWalletPrompt] = useState(false);
   const greeting = getGreeting();
-
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 800);
-    return () => clearTimeout(t);
-  }, []);
 
   const requireWallet = (fn: () => void) => {
     if (!connected) { setShowWalletPrompt(true); return; }
@@ -90,7 +96,7 @@ export default function Dashboard() {
                     <div className="flex items-center gap-3 mt-2">
                       {connected ? (
                         <>
-                          <AddressDisplay address="SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7" />
+                          <AddressDisplay address={address} />
                           <span className="flex items-center gap-1.5 text-caption text-green-400">
                             <span className="relative flex h-2 w-2">
                               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
@@ -100,7 +106,7 @@ export default function Dashboard() {
                           </span>
                         </>
                       ) : (
-                        <Button onClick={() => setShowConnectModal(true)} variant="outline" size="sm" className="gap-2 btn-press">
+                        <Button onClick={() => connect()} variant="outline" size="sm" className="gap-2 btn-press">
                           <Wallet className="w-4 h-4" /> Connect Wallet
                         </Button>
                       )}
@@ -116,10 +122,10 @@ export default function Dashboard() {
                 {/* Stats */}
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
                   {[
-                    { icon: BarChart3, label: "My Campaigns", value: "3" },
-                    { icon: ArrowUpRight, label: "Total Raised", value: "5.07 BTC" },
-                    { icon: Wallet, label: "Backed Projects", value: "7" },
-                    { icon: ArrowUpRight, label: "Total Contributed", value: "1.35 BTC" },
+                    { icon: BarChart3, label: "My Campaigns", value: String(creatorStats?.campaignsCreated ?? myCampaigns.length) },
+                    { icon: ArrowUpRight, label: "Total Raised", value: `${creatorStats ? satsToBtc(creatorStats.totalRaised).toFixed(2) : "0"} BTC` },
+                    { icon: Wallet, label: "Backed Projects", value: String(backerStats?.campaignsBacked ?? 0) },
+                    { icon: ArrowUpRight, label: "Total Contributed", value: `${backerStats ? satsToBtc(backerStats.totalContributed).toFixed(2) : "0"} BTC` },
                   ].map((stat, i) => (
                     <motion.div
                       key={stat.label}
@@ -170,7 +176,7 @@ export default function Dashboard() {
                                   <Button
                                     size="sm"
                                     className="gap-1 gradient-primary text-primary-foreground btn-press"
-                                    onClick={() => requireWallet(() => setClaimModal({ open: true, title: c.title, raised: c.raised }))}
+                                    onClick={() => requireWallet(() => setClaimModal({ open: true, title: c.title, raised: c.raised, campaignId: parseInt(c.id) }))}
                                   >
                                     <Wallet className="w-3 h-3" /> Withdraw
                                   </Button>
@@ -201,7 +207,7 @@ export default function Dashboard() {
                                 variant="outline"
                                 size="sm"
                                 className="gap-1 text-destructive btn-press"
-                                onClick={() => requireWallet(() => setRefundModal({ open: true, title: c.title, amount: 0.15 }))}
+                                onClick={() => requireWallet(() => setRefundModal({ open: true, title: c.title, amount: 0.15, campaignId: parseInt(c.id) }))}
                               >
                                 <RefreshCw className="w-3 h-3" /> Refund
                               </Button>
@@ -256,14 +262,15 @@ export default function Dashboard() {
       </PageTransition>
 
       {/* Modals */}
-      <ClaimFundsModal open={claimModal.open} onOpenChange={(v) => setClaimModal((s) => ({ ...s, open: v }))} campaignTitle={claimModal.title} raised={claimModal.raised} />
-      <RefundModal open={refundModal.open} onOpenChange={(v) => setRefundModal((s) => ({ ...s, open: v }))} campaignTitle={refundModal.title} amount={refundModal.amount} />
+      <ClaimFundsModal open={claimModal.open} onOpenChange={(v) => setClaimModal((s) => ({ ...s, open: v }))} campaignTitle={claimModal.title} raised={claimModal.raised} campaignId={claimModal.campaignId} />
+      <RefundModal open={refundModal.open} onOpenChange={(v) => setRefundModal((s) => ({ ...s, open: v }))} campaignTitle={refundModal.title} amount={refundModal.amount} campaignId={refundModal.campaignId} />
 
       {/* Wallet Prompt */}
       <Dialog open={showWalletPrompt} onOpenChange={setShowWalletPrompt}>
         <DialogContent className="glass-strong border-border/50 sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-heading-2 text-center">Wallet Required</DialogTitle>
+            <DialogDescription className="sr-only">Connect your wallet to access this feature</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center gap-5 py-4">
             <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
@@ -273,7 +280,7 @@ export default function Dashboard() {
               Connect your wallet to access this feature.
             </p>
             <Button
-              onClick={() => { setShowWalletPrompt(false); setShowConnectModal(true); }}
+              onClick={() => { setShowWalletPrompt(false); connect(); }}
               className="gradient-primary text-primary-foreground glow-orange gap-2 btn-press"
             >
               <Wallet className="w-4 h-4" /> Connect Wallet
