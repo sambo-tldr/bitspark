@@ -7,7 +7,8 @@ import { CampaignCard } from "@/components/CampaignCard";
 import { FeaturedCampaignCard } from "@/components/FeaturedCampaignCard";
 import { AnimatedCounter } from "@/components/AnimatedCounter";
 import { ParticleBackground } from "@/components/ParticleBackground";
-import { campaigns, categories, activityFeed, platformStats } from "@/data/mockData";
+import { campaigns as mockCampaigns, categories, activityFeed } from "@/data/mockData";
+import { useCampaigns, usePlatformStats, satsToBtc } from "@/hooks/useContracts";
 import { useRM } from "@/lib/motion";
 
 const categoryIcons: Record<string, React.ElementType> = {
@@ -16,8 +17,20 @@ const categoryIcons: Record<string, React.ElementType> = {
 
 export default function Index() {
   const rm = useRM();
-  const featuredCampaigns = campaigns.filter((c) => c.featured);
+  const { data: onChainCampaigns } = useCampaigns();
+  const { data: onChainStats } = usePlatformStats();
+
+  // Use on-chain campaigns if available, fall back to mock
+  const campaigns = onChainCampaigns && onChainCampaigns.length > 0 ? onChainCampaigns : mockCampaigns;
+  const featuredCampaigns = campaigns.filter((c) => c.featured || c.raised > 0).slice(0, 1);
   const trendingCampaigns = campaigns.filter((c) => c.status === "active").slice(0, 6);
+
+  const platformStats = onChainStats ? {
+    totalRaised: satsToBtc(onChainStats.totalRaised),
+    projectsFunded: onChainStats.successfulCampaigns,
+    activeBackers: 0,
+    activeCampaigns: onChainStats.totalCampaigns,
+  } : { totalRaised: 0, projectsFunded: 0, activeBackers: 0, activeCampaigns: 0 };
   const heroWords = ["Spark", "Your", "Ideas", "with", "Bitcoin"];
 
   const staggerChildren = {
@@ -138,7 +151,7 @@ export default function Index() {
               <h2 className="text-display">Featured Campaign</h2>
             </div>
           </div>
-          <FeaturedCampaignCard campaign={featuredCampaigns[0]} />
+          {featuredCampaigns[0] && <FeaturedCampaignCard campaign={featuredCampaigns[0]} />}
         </div>
       </section>
 

@@ -11,7 +11,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { campaigns, categories } from "@/data/mockData";
+import { campaigns as mockCampaigns, categories } from "@/data/mockData";
+import { useCampaigns } from "@/hooks/useContracts";
 import { cn } from "@/lib/utils";
 import { EmptyStateIllustration } from "@/components/EmptyStateIllustration";
 
@@ -31,6 +32,10 @@ export default function Explore() {
   const rm = useRM();
   const [searchParams] = useSearchParams();
   const initialCategory = searchParams.get("category") || "";
+  const { data: onChainCampaigns, isLoading } = useCampaigns();
+
+  // Use on-chain campaigns if available, fall back to mock
+  const campaigns = onChainCampaigns && onChainCampaigns.length > 0 ? onChainCampaigns : mockCampaigns;
 
   const [search, setSearch] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>(initialCategory ? [initialCategory] : []);
@@ -71,7 +76,7 @@ export default function Explore() {
       case "most-backed": result.sort((a, b) => b.backers - a.backers); break;
     }
     return result;
-  }, [search, selectedCategories, statusFilter, goalRange, sortBy]);
+  }, [search, selectedCategories, statusFilter, goalRange, sortBy, campaigns]);
 
   const hasFilters = search || selectedCategories.length || statusFilter.length || goalRange[0] > 0 || goalRange[1] < 10;
 
