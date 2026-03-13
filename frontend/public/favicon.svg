@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F7931A"/>
+      <stop offset="100%" stop-color="#E8790C"/>
+    </linearGradient>
+    <linearGradient id="spark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFD93D"/>
+      <stop offset="100%" stop-color="#FFA500"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <!-- Bitcoin ₿ symbol (simplified) -->
+  <g transform="translate(256,240)">
+    <!-- Vertical bars -->
+    <rect x="-12" y="-120" width="10" height="260" rx="5" fill="#fff" opacity="0.95"/>
+    <rect x="2" y="-120" width="10" height="260" rx="5" fill="#fff" opacity="0.95"/>
+    <!-- Upper bowl -->
+    <path d="M-50,-90 H30 C70,-90 80,-50 50,-40 H-50 Z" fill="#fff" opacity="0.95"/>
+    <!-- Lower bowl (wider) -->
+    <path d="M-50,-40 H40 C85,-40 90,20 45,30 H-50 Z" fill="#fff" opacity="0.95"/>
+  </g>
+  <!-- Spark / lightning bolt -->
+  <path d="M340,80 L300,200 L340,195 L290,310 L370,170 L330,175 Z" fill="url(#spark)" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+</svg>
