@@ -5,7 +5,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { WalletProvider } from "@/context/WalletContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { ConnectWalletModal } from "@/components/modals/ConnectWalletModal";
 import Index from "./pages/Index";
 import Explore from "./pages/Explore";
 import CampaignDetail from "./pages/CampaignDetail";
@@ -14,7 +13,15 @@ import Dashboard from "./pages/Dashboard";
 import About from "./pages/About";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 2,
+      retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
+      staleTime: 60_000,
+    },
+  },
+});
 
 const App = () => (
   <ErrorBoundary>
@@ -23,8 +30,7 @@ const App = () => (
         <WalletProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
-            <ConnectWalletModal />
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/explore" element={<Explore />} />

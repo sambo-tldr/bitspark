@@ -7,7 +7,8 @@ import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion"
 import { useRM } from "@/lib/motion";
 import { useWallet } from "@/context/WalletContext";
 import { useDebounce } from "@/hooks/useDebounce";
-import { campaigns } from "@/data/mockData";
+import { useCampaigns } from "@/hooks/useContracts";
+import type { Campaign } from "@/data/mockData";
 import { Badge } from "./ui/badge";
 import { EmptyStateIllustration } from "./EmptyStateIllustration";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from "./ui/dropdown-menu";
@@ -25,7 +26,7 @@ function SearchResults({
   query,
   onSelect,
 }: {
-  results: typeof campaigns;
+  results: Campaign[];
   query: string;
   onSelect: () => void;
 }) {
@@ -95,7 +96,8 @@ export function Navbar() {
   const debouncedQuery = useDebounce(searchQuery, 300);
   const searchRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  const { connected, disconnect, setShowConnectModal, walletType } = useWallet();
+  const { connected, disconnect, connect, walletType, address, shortAddress } = useWallet();
+  const { data: campaigns = [] } = useCampaigns();
   const location = useLocation();
   const { toast } = useToast();
 
@@ -120,7 +122,7 @@ export function Navbar() {
           c.shortDescription.toLowerCase().includes(q)
       )
       .slice(0, 5);
-  }, [debouncedQuery]);
+  }, [debouncedQuery, campaigns]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -153,7 +155,7 @@ export function Navbar() {
   };
 
   const handleCopyAddress = () => {
-    navigator.clipboard.writeText("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
+    navigator.clipboard.writeText(address);
     toast({ title: "Address copied", description: "Wallet address copied to clipboard." });
   };
 
@@ -242,7 +244,7 @@ export function Navbar() {
                     className="hidden sm:flex gap-2 rounded-full px-5 btn-press bg-secondary text-foreground hover:bg-secondary/80"
                   >
                     <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                    <span className="font-mono text-body-sm">SP2J6...9EJ7</span>
+                    <span className="font-mono text-body-sm">{shortAddress}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
@@ -252,14 +254,14 @@ export function Navbar() {
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem disabled className="text-xs font-mono text-muted-foreground">
-                    SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7
+                    {address}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleCopyAddress}>
                     <Copy className="w-4 h-4 mr-2" />
                     Copy Address
                   </DropdownMenuItem>
                   <DropdownMenuItem disabled className="text-xs text-muted-foreground">
-                    Balance: 0.5 BTC
+                    Stacks Testnet
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleDisconnect} className="text-destructive focus:text-destructive">
@@ -270,7 +272,7 @@ export function Navbar() {
               </DropdownMenu>
             ) : (
               <Button
-                onClick={() => setShowConnectModal(true)}
+                onClick={() => connect()}
                 className="hidden sm:flex gap-2 rounded-full px-5 btn-press gradient-primary text-primary-foreground"
               >
                 Connect Wallet
@@ -363,7 +365,7 @@ export function Navbar() {
               <div className="mt-auto">
                 <Button
                   onClick={() => {
-                    if (connected) { handleDisconnect(); } else { setShowConnectModal(true); }
+                    if (connected) { handleDisconnect(); } else { connect(); }
                     setMobileOpen(false);
                   }}
                   className={cn(
